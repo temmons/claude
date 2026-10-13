@@ -1,0 +1,245 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DuPage Apartment-Zoned Parcels</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>/*__LEAFLET_CSS__*/</style>
+<style>
+/* Layout: plat-map workbench. Filter rail on the left, full-height map on the right; stacks map-first on phones. */
+:root {
+  --paper: #eef1ef;      /* map ground, faint green-grey like survey vellum */
+  --panel: #f8faf9;
+  --ink: #17262f;
+  --muted: #5b6b72;
+  --rule: #cdd6d4;
+  --town: #9aa9a6;
+  --road: #b9c2bf;
+  --road-major: #8d9894;
+  --c-apt: #b4462b;      /* multi-family apartments: brick */
+  --c-att: #c98a1b;      /* townhouse / attached: ochre */
+  --c-mix: #2f6f8f;      /* commercial / mixed-use: slate blue */
+  --focus: #17262f;
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121a1e; --panel: #182227; --ink: #e3ebe9; --muted: #9aaab0; --rule: #2c3a40;
+    --town: #4c5d63; --road: #2f3d42; --road-major: #4a5a60;
+    --c-apt: #e0714f; --c-att: #e3a93a; --c-mix: #5aa6cc; --focus: #e3ebe9; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121a1e; --panel: #182227; --ink: #e3ebe9; --muted: #9aaab0; --rule: #2c3a40;
+  --town: #4c5d63; --road: #2f3d42; --road-major: #4a5a60;
+  --c-apt: #e0714f; --c-att: #e3a93a; --c-mix: #5aa6cc; --focus: #e3ebe9; color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: var(--f-body); }
+.app { display: grid; grid-template-columns: minmax(280px, 340px) 1fr; height: 100%; }
+.rail { background: var(--panel); border-right: 1px solid var(--rule); overflow-y: auto; padding: 18px 18px 24px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+h1 { font-family: var(--f-display); font-weight: 800; font-size: 1.32rem; line-height: 1.15; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.sub { color: var(--muted); font-size: 0.82rem; line-height: 1.45; margin: 6px 0 0; }
+.label { font-family: var(--f-display); font-weight: 700; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 8px; }
+.count { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.count div { border-top: 2px solid var(--ink); padding-top: 6px; }
+.count b { display: block; font-family: var(--f-mono); font-weight: 500; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.count span { font-size: 0.75rem; color: var(--muted); }
+fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.opt { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; cursor: pointer; }
+.opt input { margin: 0; accent-color: var(--ink); }
+.sw { width: 14px; height: 14px; border-radius: 2px; flex: none; border: 2px solid currentColor; }
+.sw.solid { background: currentColor; }
+.opt .n { margin-left: auto; font-family: var(--f-mono); font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+select, input[type="search"], input[type="number"] { width: 100%; font: inherit; font-size: 0.86rem; padding: 7px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); color: var(--ink); box-sizing: border-box; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.detail { border: 1px solid var(--rule); border-radius: 4px; padding: 12px; font-size: 0.84rem; background: var(--paper); }
+.detail h2 { font-family: var(--f-display); font-size: 1rem; margin: 0 0 2px; }
+.detail dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 8px 0 0; }
+.detail dt { color: var(--muted); }
+.detail dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.detail a { color: var(--c-mix); }
+.flag { margin-top: 8px; font-size: 0.78rem; color: var(--c-apt); }
+.note { font-size: 0.76rem; color: var(--muted); line-height: 1.45; }
+.note b { color: var(--ink); font-weight: 600; }
+#map { height: 100%; background: var(--paper); }
+.leaflet-container { background: var(--paper); font-family: var(--f-body); }
+.leaflet-control-attribution { background: var(--panel) !important; color: var(--muted); }
+.leaflet-control-zoom a { background: var(--panel); color: var(--ink); border-color: var(--rule); }
+.leaflet-tooltip.town { background: transparent; border: 0; box-shadow: none; color: var(--muted); font-family: var(--f-display); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.leaflet-tooltip.town::before { display: none; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 58vh auto; height: auto; }
+  #map { height: 58vh; order: -1; }
+  .rail { border-right: 0; border-top: 1px solid var(--rule); overflow: visible; padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <header>
+      <h1>DuPage parcels zoned for apartments, now vacant or a single-family home</h1>
+      <p class="sub">County parcel and assessment data joined to each town's zoning layer. Data pulled <span id="built"></span>.</p>
+    </header>
+
+    <section aria-label="Totals">
+      <div class="count">
+        <div><b id="nShown">0</b><span>parcels shown</span></div>
+        <div><b id="acShown">0</b><span>acres shown</span></div>
+      </div>
+    </section>
+
+    <section>
+      <p class="label">Current use</p>
+      <fieldset id="useBox">
+        <label class="opt"><input type="checkbox" id="use-V" value="V" checked><span class="sw solid" style="color:var(--muted)"></span>Vacant land<span class="n" id="cnt-V"></span></label>
+        <label class="opt"><input type="checkbox" id="use-S" value="S" checked><span class="sw" style="color:var(--muted)"></span>Single-family home<span class="n" id="cnt-S"></span></label>
+      </fieldset>
+    </section>
+
+    <section>
+      <p class="label">Zoning</p>
+      <fieldset id="catBox">
+        <label class="opt"><input type="checkbox" id="cat-MF_APT" value="MF_APT" checked><span class="sw solid" style="color:var(--c-apt)"></span>Multi-family (apartments)<span class="n" id="cnt-MF_APT"></span></label>
+        <label class="opt"><input type="checkbox" id="cat-MF_ATT" value="MF_ATT" checked><span class="sw solid" style="color:var(--c-att)"></span>Multi-family (townhouse/attached)<span class="n" id="cnt-MF_ATT"></span></label>
+        <label class="opt"><input type="checkbox" id="cat-MIXED_USE" value="MIXED_USE" checked><span class="sw solid" style="color:var(--c-mix)"></span>Commercial/mixed-use allowing apartments<span class="n" id="cnt-MIXED_USE"></span></label>
+      </fieldset>
+    </section>
+
+    <section class="row2">
+      <div>
+        <label class="label" for="town">Municipality</label>
+        <select id="town"><option value="">All</option></select>
+      </div>
+      <div>
+        <label class="label" for="minAc">Min. acres</label>
+        <input type="number" id="minAc" min="0" step="0.05" value="0">
+      </div>
+    </section>
+
+    <section>
+      <label class="label" for="q">Find PIN or address</label>
+      <input type="search" id="q" placeholder="e.g. 0816104012 or Main St">
+    </section>
+
+    <section id="detail" class="detail" aria-live="polite">
+      <p class="note">Click a parcel for zoning, assessed value and a map link. Filled shapes are vacant land; outlined shapes are houses.</p>
+    </section>
+
+    <section class="note">
+      <p><b>Not covered:</b> <span id="notcov"></span>. These towns publish zoning only as PDF maps.</p>
+      <p>Single-family excludes condos and townhouse/duplex units (detected from building footprints). Planned-development zones are not counted. Confirm zoning with the municipality before acting on any parcel.</p>
+    </section>
+  </aside>
+  <main id="map" aria-label="Map of candidate parcels"></main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script type="application/json" id="d-parcels">__PARCELS__</script>
+<script type="application/json" id="d-muni">__MUNI__</script>
+<script type="application/json" id="d-roads">__ROADS__</script>
+<script type="application/json" id="d-meta">__META__</script>
+<script>
+(function () {
+  const J = id => JSON.parse(document.getElementById(id).textContent);
+  const parcels = J("d-parcels"), muni = J("d-muni"), roads = J("d-roads"), meta = J("d-meta");
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const CAT = { MF_APT: "Multi-family (apartments)", MF_ATT: "Multi-family (townhouse/attached)", MIXED_USE: "Commercial/mixed-use allowing apartments" };
+  const USE = { V: "Vacant land", S: "Single-family home" };
+  const catVar = { MF_APT: "--c-apt", MF_ATT: "--c-att", MIXED_USE: "--c-mix" };
+
+  document.getElementById("built").textContent = meta.built;
+  document.getElementById("notcov").textContent = meta.not_covered.map(r => r[0]).join(", ");
+  const towns = [...new Set(parcels.features.map(f => f.properties.town))].sort();
+  const sel = document.getElementById("town");
+  towns.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; sel.appendChild(o); });
+
+  const renderer = L.canvas({ padding: 0.5, tolerance: 4 });
+  const map = L.map("map", { preferCanvas: true, renderer, zoomSnap: 0.5, attributionControl: true }).setView([41.84, -88.09], 11);
+  map.attributionControl.setPrefix(false).addAttribution("DuPage County GIS · municipal zoning layers · USA Structures");
+
+  let muniLayer, roadLayer, parcelLayer;
+  function styleContext() {
+    if (muniLayer) muniLayer.setStyle({ color: css("--town"), weight: 1.2, fill: false, dashArray: "4 3" });
+    if (roadLayer) roadLayer.setStyle(f => ({ color: f.properties.major ? css("--road-major") : css("--road"), weight: f.properties.major ? 2 : 1 }));
+  }
+  muniLayer = L.geoJSON(muni, { interactive: false, renderer }).addTo(map);
+  roadLayer = L.geoJSON(roads, { interactive: false, renderer }).addTo(map);
+  muni.features.forEach(f => {
+    if (/^uninc/i.test(f.properties.CITY)) return;
+    const c = L.geoJSON(f).getBounds().getCenter();
+    L.tooltip({ permanent: true, direction: "center", className: "town", interactive: false }).setLatLng(c).setContent(f.properties.CITY).addTo(map);
+  });
+
+  function pStyle(f) {
+    const col = css(catVar[f.properties.cat]);
+    const vac = f.properties.use === "V";
+    return { color: col, weight: vac ? 1 : 1.6, fillColor: col, fillOpacity: vac ? 0.75 : 0.12, opacity: 0.95 };
+  }
+  const fmt = n => n.toLocaleString("en-US");
+  function showDetail(p) {
+    const ll = p._ll;
+    const d = document.getElementById("detail");
+    d.innerHTML = "";
+    const h = document.createElement("h2"); h.textContent = p.address || "(no situs address)"; d.appendChild(h);
+    const dl = document.createElement("dl");
+    const rows = [["PIN", p.PIN, true], ["Town", p.town], ["Current use", USE[p.use]], ["Zoning", p.zone], ["Category", CAT[p.cat]], ["Lot", p.acres + " ac", true], ["Assessed", "$" + fmt(p.av || 0), true], ["Est. market", "$" + fmt((p.av || 0) * 3), true]];
+    rows.forEach(([k, v, mono]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; if (mono) dd.className = "mono"; dl.append(dt, dd); });
+    d.appendChild(dl);
+    if (p.flags) { const fl = document.createElement("div"); fl.className = "flag"; fl.textContent = p.flags; d.appendChild(fl); }
+    const a = document.createElement("a"); a.href = "https://www.google.com/maps/search/?api=1&query=" + ll.lat.toFixed(6) + "," + ll.lng.toFixed(6);
+    a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open location in Google Maps";
+    const pa = document.createElement("p"); pa.style.margin = "10px 0 0"; pa.appendChild(a); d.appendChild(pa);
+  }
+
+  parcelLayer = L.geoJSON(parcels, {
+    renderer, style: pStyle,
+    onEachFeature: (f, layer) => {
+      f.properties._ll = layer.getBounds().getCenter();
+      layer.on("click", () => showDetail(f.properties));
+      layer.bindTooltip(() => (f.properties.address || f.properties.PIN) + " · " + f.properties.zone, { sticky: true });
+    }
+  }).addTo(map);
+  const all = [];
+  parcelLayer.eachLayer(l => all.push(l));
+
+  function checked(boxId) { return new Set([...document.querySelectorAll("#" + boxId + " input:checked")].map(i => i.value)); }
+  function apply(fit) {
+    const uses = checked("useBox"), cats = checked("catBox"), town = sel.value;
+    const minAc = parseFloat(document.getElementById("minAc").value) || 0;
+    const q = document.getElementById("q").value.trim().toUpperCase().replace(/-/g, "");
+    let n = 0, ac = 0; const cnt = { V: 0, S: 0, MF_APT: 0, MF_ATT: 0, MIXED_USE: 0 };
+    const shown = [];
+    all.forEach(l => {
+      const p = l.feature.properties;
+      const base = (!town || p.town === town) && p.acres >= minAc && (!q || (p.PIN || "").includes(q) || (p.address || "").toUpperCase().includes(q));
+      if (base && cats.has(p.cat)) cnt[p.use]++;
+      if (base && uses.has(p.use)) cnt[p.cat]++;
+      const on = base && uses.has(p.use) && cats.has(p.cat);
+      if (on) { n++; ac += p.acres; shown.push(l); if (!parcelLayer.hasLayer(l)) parcelLayer.addLayer(l); }
+      else if (parcelLayer.hasLayer(l)) parcelLayer.removeLayer(l);
+    });
+    document.getElementById("nShown").textContent = fmt(n);
+    document.getElementById("acShown").textContent = fmt(Math.round(ac));
+    Object.keys(cnt).forEach(k => { const e = document.getElementById("cnt-" + k); if (e) e.textContent = fmt(cnt[k]); });
+    if (fit && shown.length) map.fitBounds(L.featureGroup(shown).getBounds(), { maxZoom: 17, padding: [20, 20] });
+    if (q && shown.length === 1) showDetail(shown[0].feature.properties);
+  }
+  document.querySelectorAll("#useBox input, #catBox input").forEach(i => i.addEventListener("change", () => apply(false)));
+  sel.addEventListener("change", () => apply(true));
+  document.getElementById("minAc").addEventListener("input", () => apply(false));
+  let t; document.getElementById("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => apply(true), 250); });
+
+  styleContext();
+  apply(false);
+  map.fitBounds(parcelLayer.getBounds(), { padding: [10, 10] });
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const restyle = () => { styleContext(); parcelLayer.setStyle(pStyle); };
+  mq.addEventListener && mq.addEventListener("change", restyle);
+  new MutationObserver(restyle).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
