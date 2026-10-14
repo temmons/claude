@@ -187,13 +187,18 @@ select, input[type="search"], input[type="number"] { width: 100%; font: inherit;
     d.innerHTML = "";
     const h = document.createElement("h2"); h.textContent = p.address || "(no situs address)"; d.appendChild(h);
     const dl = document.createElement("dl");
-    const rows = [["PIN", p.PIN, true], ["Town", p.town], ["Current use", USE[p.use]], ["Zoning", p.zone], ["Category", CAT[p.cat]], ["Lot", p.acres + " ac", true], ["Assessed", "$" + fmt(p.av || 0), true], ["Est. market", "$" + fmt((p.av || 0) * 3), true]];
+    const rows = [["PIN", p.PIN, true], ["Town", p.town], ["Current use", USE[p.use]], ["Zoning", p.zone], ["Category", CAT[p.cat]], ["Lot", p.acres + " ac", true], ["Assessed", "$" + fmt(p.av || 0), true], ["Est. market", "$" + fmt((p.av || 0) * 3), true],
+      ["Last sale", p.sd ? p.sd + (p.sp ? " · $" + fmt(+p.sp) : "") + (p.st ? " (" + p.st + ")" : "") : "none on record", !!p.sd]];
     rows.forEach(([k, v, mono]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; if (mono) dd.className = "mono"; dl.append(dt, dd); });
     d.appendChild(dl);
     if (p.flags) { const fl = document.createElement("div"); fl.className = "flag"; fl.textContent = p.flags; d.appendChild(fl); }
     const a = document.createElement("a"); a.href = "https://www.google.com/maps/search/?api=1&query=" + ll.lat.toFixed(6) + "," + ll.lng.toFixed(6);
-    a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open location in Google Maps";
-    const pa = document.createElement("p"); pa.style.margin = "10px 0 0"; pa.appendChild(a); d.appendChild(pa);
+    a.target = "_blank"; a.rel = "noopener"; a.textContent = "Google Maps";
+    const pa = document.createElement("p"); pa.style.margin = "10px 0 0"; pa.style.display = "flex"; pa.style.flexWrap = "wrap"; pa.style.gap = "6px 14px"; pa.appendChild(a);
+    const mk = (href, text) => { const x = document.createElement("a"); x.href = href; x.target = "_blank"; x.rel = "noopener"; x.textContent = text; pa.appendChild(x); };
+    mk("https://propertylookup.dupagecounty.gov/Datalets/Datalet.aspx?UseSearch=no&mode=sales&pin=" + p.PIN, "County sales record");
+    if (p.zl) mk(p.zl, "Check for sale on Zillow");
+    d.appendChild(pa);
   }
 
   parcelLayer = L.geoJSON(parcels, {

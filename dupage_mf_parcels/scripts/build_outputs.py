@@ -22,6 +22,20 @@ side = "vacant lot owned by the owner of an adjoining improved parcel (likely si
 c["flag_text"] = c.structure_type_note.fillna("")
 c.loc[c.vacant_side_lot_flag, "flag_text"] = (c.flag_text + "; " + side).str.strip("; ")
 
+# Most recent recorded sale (fetch_sales.py) and lookup links.
+try:
+    sales = pd.read_csv(f"{WORK}/_sales.csv", dtype={"PIN": str})
+    c = c.merge(sales, on="PIN", how="left")
+except FileNotFoundError:
+    for k in ["last_sale_date", "last_sale_price", "last_sale_doc_type", "last_sale_buyer"]:
+        c[k] = None
+c["last_sale_date"] = pd.to_datetime(c.last_sale_date, format="%m/%d/%Y", errors="coerce")
+c["last_sale_price"] = pd.to_numeric(c.last_sale_price.astype(str).str.replace(r"[$,]", "", regex=True), errors="coerce")
+c["record_link"] = "https://propertylookup.dupagecounty.gov/Datalets/Datalet.aspx?UseSearch=no&mode=sales&pin=" + c.PIN
+city = c.city_zip.str.replace(r"\s+IL\s+", " IL ", regex=True)
+c["listing_link"] = ("https://www.zillow.com/homes/" + (c.address + " " + city).str.replace(r"[^A-Za-z0-9 ]", "", regex=True).str.strip().str.replace(r"\s+", "-", regex=True) + "_rb/")
+c.loc[c.address.str.len() < 3, "listing_link"] = None
+
 cols = {
     "PIN": "PIN",
     "address": "Property address",
@@ -42,6 +56,12 @@ cols = {
     "REA017_FCV_TOTAL": "Assessed total $",
     "market_value_est": "Est. market value $ (3x assessed)",
     "BILLNAME": "Taxpayer name",
+    "last_sale_date": "Last sale date",
+    "last_sale_price": "Last sale price $",
+    "last_sale_doc_type": "Last sale deed type",
+    "last_sale_buyer": "Last sale buyer",
+    "listing_link": "Check for sale (Zillow)",
+    "record_link": "County sales record",
     "flag_text": "Flags",
     "lat": "Latitude",
     "lon": "Longitude",
@@ -91,6 +111,8 @@ readme = [
     ("SOURCES", ""),
     ("Parcels & assessment", "DuPage County GIS, ParcelsWithRealEstateCC: https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/FeatureServer/0 (assessed values are 1/3 of market value)."),
     ("Zoning", "Each municipality's own published zoning layer, plus DuPage County unincorporated zoning. Layer URLs are on the 'Coverage' sheet."),
+    ("Sales", "Most recent recorded transfer from the DuPage County Property Lookup portal (https://propertylookup.dupagecounty.gov), Sales page per PIN. Includes non-market transfers (quitclaim, trustee and other deeds, often at $0 or $10); check the deed type before treating a price as market value."),
+    ("For sale", "No free, permitted source of active listings exists (listings come from the MLS; Zillow/Redfin/LoopNet prohibit automated collection). 'Check for sale' opens a Zillow search for the address. Vacant parcels without a street address have no link."),
     ("Building footprints", "USA Structures (FEMA/ORNL), FIPS 17043: https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0"),
     ("District rules", "Municipal zoning codes (via Zoneomics code mirror and municipal PDFs) and district names/descriptions in the towns' GIS layers."),
     ("", ""),
@@ -131,12 +153,18 @@ with pd.ExcelWriter(xlsx, engine="openpyxl") as xw:
             row[0].font = Font(bold=True)
     ws = xw.book["Parcels"]
     ws.auto_filter.ref = ws.dimensions
-    link_col = list(cols.values()).index("Map link") + 1
+    for name, text in [("Map link", "map"), ("Check for sale (Zillow)", "check listing"), ("County sales record", "sales record")]:
+        link_col = list(cols.values()).index(name) + 1
+        for r in range(2, ws.max_row + 1):
+            cell = ws.cell(r, link_col)
+            if cell.value:
+                cell.hyperlink = cell.value
+                cell.value = text
+                cell.font = Font(color="0563C1", underline="single")
+    dcol = list(cols.values()).index("Last sale date") + 1
     for r in range(2, ws.max_row + 1):
-        cell = ws.cell(r, link_col)
-        cell.hyperlink = cell.value
-        cell.value = "map"
-        cell.font = Font(color="0563C1", underline="single")
+        ws.cell(r, dcol).number_format = "yyyy-mm-dd"
+    ws.column_dimensions[get_column_letter(dcol)].width = 12
     money = [list(cols.values()).index(k) + 1 for k in cols.values() if k.endswith("$") or "$ (" in k]
     for r in range(2, ws.max_row + 1):
         for m in money:
@@ -147,10 +175,13 @@ print("wrote", xlsx, len(tbl), "rows")
 
 # ---------------------------------------------------------------- map data
 m = c[["PIN", "address", "MUNICIPALITY", "current_use", "zoning_cat", "zoning_raw", "acres",
-       "REA017_FCV_TOTAL", "flag_text", "geometry"]].copy()
+       "REA017_FCV_TOTAL", "flag_text", "last_sale_date", "last_sale_price", "last_sale_doc_type", "listing_link", "geometry"]].copy()
+m["last_sale_date"] = m.last_sale_date.dt.strftime("%Y-%m-%d")
+m["last_sale_price"] = m.last_sale_price.astype("Int64").astype(str).replace("<NA>", "")
 m["geometry"] = m.to_crs(3435).simplify(1.5).to_crs(4326)
 m = m.rename(columns={"MUNICIPALITY": "town", "current_use": "use", "zoning_cat": "cat", "zoning_raw": "zone",
-                      "REA017_FCV_TOTAL": "av", "flag_text": "flags"})
+                      "REA017_FCV_TOTAL": "av", "flag_text": "flags",
+                      "last_sale_date": "sd", "last_sale_price": "sp", "last_sale_doc_type": "st", "listing_link": "zl"})
 m["use"] = m.use.map({"Vacant land": "V", "Single-family home": "S"})
 m["town"] = m.town.replace({"Uninc": "Unincorporated"})
 m["av"] = m.av.fillna(0).astype(int)
