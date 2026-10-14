@@ -160,8 +160,8 @@ with pd.ExcelWriter(xlsx, engine="openpyxl") as xw:
         for r in range(2, ws.max_row + 1):
             cell = ws.cell(r, link_col)
             if cell.value:
-                cell.hyperlink = cell.value
-                cell.value = text
+                # HYPERLINK formulas instead of hyperlink objects: Google Sheets imports them reliably.
+                cell.value = '=HYPERLINK("%s","%s")' % (cell.value.replace('"', "%22"), text)
                 cell.font = Font(color="0563C1", underline="single")
     dcol = list(cols.values()).index("Last sale date") + 1
     for r in range(2, ws.max_row + 1):
@@ -173,6 +173,7 @@ with pd.ExcelWriter(xlsx, engine="openpyxl") as xw:
             ws.cell(r, m).number_format = "#,##0"
     xw.book["Summary by town"].auto_filter.ref = xw.book["Summary by town"].dimensions
     xw.book["Zoning districts"].auto_filter.ref = xw.book["Zoning districts"].dimensions
+tbl.to_csv(f"{OUT}/DuPage_apartment_zoned_vacant_or_SF_parcels.csv", index=False, date_format="%Y-%m-%d")
 print("wrote", xlsx, len(tbl), "rows")
 
 # ---------------------------------------------------------------- map data
