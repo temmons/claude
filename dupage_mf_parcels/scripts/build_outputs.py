@@ -5,8 +5,7 @@ from datetime import date
 
 import geopandas as gpd
 import pandas as pd
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
+import xlsxwriter
 
 from sources import NO_GIS_ZONING, SOURCES
 from zoning_classes import CLASSES, LABELS
@@ -129,51 +128,52 @@ readme = [
 rm = pd.DataFrame(readme, columns=["Item", "Detail"])
 
 xlsx = f"{OUT}/DuPage_apartment_zoned_vacant_or_SF_parcels.xlsx"
-with pd.ExcelWriter(xlsx, engine="openpyxl") as xw:
-    rm.to_excel(xw, sheet_name="Read me", index=False)
-    tbl.to_excel(xw, sheet_name="Parcels", index=False)
-    summary.to_excel(xw, sheet_name="Summary by town", index=False)
-    zt.to_excel(xw, sheet_name="Zoning districts", index=False)
-    cov.to_excel(xw, sheet_name="Coverage", index=False)
-    head = PatternFill("solid", fgColor="1F3A5F")
-    for ws in xw.book.worksheets:
-        for cell in ws[1]:
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = head
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
-        ws.freeze_panes = "A2"
-        for i, col in enumerate(ws.columns, 1):
-            width = max(len(str(v.value or "")) for v in list(col)[:300])
-            ws.column_dimensions[get_column_letter(i)].width = min(max(10, width + 2), 60)
-    ws = xw.book["Read me"]
-    ws.column_dimensions["A"].width = 48
-    ws.column_dimensions["B"].width = 120
-    for row in ws.iter_rows(min_row=2):
-        for cell in row:
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
-        if row[0].value and row[0].value.isupper():
-            row[0].font = Font(bold=True)
-    ws = xw.book["Parcels"]
-    ws.auto_filter.ref = ws.dimensions
-    for name, text in [("Map link", "map"), ("Check for sale (Zillow)", "check listing"), ("County sales record", "sales record")]:
-        link_col = list(cols.values()).index(name) + 1
-        for r in range(2, ws.max_row + 1):
-            cell = ws.cell(r, link_col)
-            if cell.value:
-                # HYPERLINK formulas instead of hyperlink objects: Google Sheets imports them reliably.
-                cell.value = '=HYPERLINK("%s","%s")' % (cell.value.replace('"', "%22"), text)
-                cell.font = Font(color="0563C1", underline="single")
-    dcol = list(cols.values()).index("Last sale date") + 1
-    for r in range(2, ws.max_row + 1):
-        ws.cell(r, dcol).number_format = "yyyy-mm-dd"
-    ws.column_dimensions[get_column_letter(dcol)].width = 12
-    money = [list(cols.values()).index(k) + 1 for k in cols.values() if k.endswith("$") or "$ (" in k]
-    for r in range(2, ws.max_row + 1):
-        for m in money:
-            ws.cell(r, m).number_format = "#,##0"
-    xw.book["Summary by town"].auto_filter.ref = xw.book["Summary by town"].dimensions
-    xw.book["Zoning districts"].auto_filter.ref = xw.book["Zoning districts"].dimensions
-tbl.to_csv(f"{OUT}/DuPage_apartment_zoned_vacant_or_SF_parcels.csv", index=False, date_format="%Y-%m-%d")
+# Written cell by cell with xlsxwriter: text goes in the shared-strings table, which
+# Google Sheets requires (it drops pandas/openpyxl "inline string" cells on import).
+LINKS = {"Map link": "map", "Check for sale (Zillow)": "check listing", "County sales record": "sales record"}
+wb = xlsxwriter.Workbook(xlsx, {"strings_to_numbers": False, "strings_to_formulas": False, "strings_to_urls": False})
+f_head = wb.add_format({"bold": True, "font_color": "#FFFFFF", "bg_color": "#1F3A5F", "text_wrap": True, "valign": "top"})
+f_wrap = wb.add_format({"text_wrap": True, "valign": "top"})
+f_bold = wb.add_format({"bold": True, "text_wrap": True, "valign": "top"})
+f_money = wb.add_format({"num_format": "#,##0"})
+f_date = wb.add_format({"num_format": "yyyy-mm-dd"})
+f_link = wb.add_format({"font_color": "#0563C1", "underline": 1})
+
+
+def write_sheet(name, df, widths=None, wrap=False, filt=True):
+    ws = wb.add_worksheet(name)
+    for j, col in enumerate(df.columns):
+        ws.write_string(0, j, str(col), f_head)
+        vals = df[col].tolist()
+        w = max([len(str(col))] + [len(str(v)) for v in vals[:300] if v is not None])
+        ws.set_column(j, j, (widths or {}).get(col, min(max(10, w + 2), 60)))
+        money = col.endswith("$") or "$ (" in col
+        for i, v in enumerate(vals, 1):
+            if v is None or (not isinstance(v, str) and pd.isna(v)):
+                continue
+            if col in LINKS:
+                ws.write_formula(i, j, '=HYPERLINK("%s","%s")' % (v.replace('"', "%22"), LINKS[col]), f_link, LINKS[col])
+            elif isinstance(v, pd.Timestamp):
+                ws.write_datetime(i, j, v.to_pydatetime(), f_date)
+            elif isinstance(v, (bool,)):
+                ws.write_boolean(i, j, v)
+            elif isinstance(v, (int, float)):
+                ws.write_number(i, j, float(v), f_money if money else None)
+            else:
+                fmt = f_bold if (wrap and j == 0 and str(v).isupper()) else (f_wrap if wrap else None)
+                ws.write_string(i, j, str(v), fmt)
+    ws.freeze_panes(1, 0)
+    if filt and len(df):
+        ws.autofilter(0, 0, len(df), len(df.columns) - 1)
+    return ws
+
+
+write_sheet("Read me", rm, widths={"Item": 48, "Detail": 120}, wrap=True, filt=False)
+write_sheet("Parcels", tbl, widths={"Last sale date": 12})
+write_sheet("Summary by town", summary)
+write_sheet("Zoning districts", zt)
+write_sheet("Coverage", cov)
+wb.close()
 print("wrote", xlsx, len(tbl), "rows")
 
 # ---------------------------------------------------------------- map data
