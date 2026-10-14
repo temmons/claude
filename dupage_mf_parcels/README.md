@@ -5,7 +5,7 @@ Parcels in DuPage County, IL that are **zoned multi-family, or commercial/mixed-
 ## Outputs (`output/`)
 | File | What it is |
 |---|---|
-| `DuPage_apartment_zoned_vacant_or_SF_parcels.xlsx` | Parcel list (PIN, address, zoning, use, lot size, assessed value, owner, flags, map link), summary by town, the zoning-district classification table, coverage by municipality, and method notes |
+| `DuPage_apartment_zoned_vacant_or_SF_parcels.xlsx` | Parcel list (PIN, address, zoning, use, lot size, assessed value, owner, last recorded sale, links to the county sales record and a Zillow listing search, flags, map link), summary by town, the zoning-district classification table, coverage by municipality, and method notes |
 | `dupage_apartment_zoned_parcels_map.html` | Standalone interactive map (open in a browser); filter by use, zoning category, town, acreage, PIN/address |
 | `dupage_mf_candidates.geojson` | Parcel polygons with all attributes, for GIS |
 

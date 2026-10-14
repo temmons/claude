@@ -30,6 +30,7 @@ except FileNotFoundError:
     for k in ["last_sale_date", "last_sale_price", "last_sale_doc_type", "last_sale_buyer"]:
         c[k] = None
 c["last_sale_date"] = pd.to_datetime(c.last_sale_date, format="%m/%d/%Y", errors="coerce")
+c.loc[c.last_sale_date.dt.year < 1950, "last_sale_date"] = pd.NaT  # 01/01/1900 is a placeholder in the county data
 c["last_sale_price"] = pd.to_numeric(c.last_sale_price.astype(str).str.replace(r"[$,]", "", regex=True), errors="coerce")
 c["record_link"] = "https://propertylookup.dupagecounty.gov/Datalets/Datalet.aspx?UseSearch=no&mode=sales&pin=" + c.PIN
 city = c.city_zip.str.replace(r"\s+IL\s+", " IL ", regex=True)
@@ -112,6 +113,7 @@ readme = [
     ("Parcels & assessment", "DuPage County GIS, ParcelsWithRealEstateCC: https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/FeatureServer/0 (assessed values are 1/3 of market value)."),
     ("Zoning", "Each municipality's own published zoning layer, plus DuPage County unincorporated zoning. Layer URLs are on the 'Coverage' sheet."),
     ("Sales", "Most recent recorded transfer from the DuPage County Property Lookup portal (https://propertylookup.dupagecounty.gov), Sales page per PIN. Includes non-market transfers (quitclaim, trustee and other deeds, often at $0 or $10); check the deed type before treating a price as market value."),
+    ("Deed type codes", "WD warranty deed, SW special warranty deed, TD trustee's deed, ED executor's deed, QC quitclaim deed, TR trust transfer, BI beneficial interest assignment, OT other. WD/SW sales are usually market sales."),
     ("For sale", "No free, permitted source of active listings exists (listings come from the MLS; Zillow/Redfin/LoopNet prohibit automated collection). 'Check for sale' opens a Zillow search for the address. Vacant parcels without a street address have no link."),
     ("Building footprints", "USA Structures (FEMA/ORNL), FIPS 17043: https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0"),
     ("District rules", "Municipal zoning codes (via Zoneomics code mirror and municipal PDFs) and district names/descriptions in the towns' GIS layers."),
