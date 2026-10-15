@@ -197,6 +197,7 @@ select, input[type="search"], input[type="number"] { width: 100%; font: inherit;
     const pa = document.createElement("p"); pa.style.margin = "10px 0 0"; pa.style.display = "flex"; pa.style.flexWrap = "wrap"; pa.style.gap = "6px 14px"; pa.appendChild(a);
     const mk = (href, text) => { const x = document.createElement("a"); x.href = href; x.target = "_blank"; x.rel = "noopener"; x.textContent = text; pa.appendChild(x); };
     mk("https://propertylookup.dupagecounty.gov/Datalets/Datalet.aspx?UseSearch=no&mode=sales&pin=" + p.PIN, "County sales record");
+    if (p.lu) mk(p.lu, "Listing found" + (p.lp ? " · $" + fmt(+p.lp) : ""));
     if (p.zl) mk(p.zl, "Check for sale on Zillow");
     d.appendChild(pa);
   }

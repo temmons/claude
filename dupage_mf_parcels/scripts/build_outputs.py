@@ -31,6 +31,13 @@ except FileNotFoundError:
 c["last_sale_date"] = pd.to_datetime(c.last_sale_date, format="%m/%d/%Y", errors="coerce")
 c.loc[c.last_sale_date.dt.year < 1950, "last_sale_date"] = pd.NaT  # 01/01/1900 is a placeholder in the county data
 c["last_sale_price"] = pd.to_numeric(c.last_sale_price.astype(str).str.replace(r"[$,]", "", regex=True), errors="coerce")
+# Listings found by town-by-town web searches (data/listings_found.csv), matched by address.
+from pathlib import Path
+from match_listings import match
+LISTINGS = Path(__file__).resolve().parent.parent / "data" / "listings_found.csv"
+hits, listings = match(c, LISTINGS)
+c = c.merge(hits, on="PIN", how="left")
+c["listing_found"] = c.listing_url.notna().map({True: "TRUE", False: ""})
 c["record_link"] = "https://propertylookup.dupagecounty.gov/Datalets/Datalet.aspx?UseSearch=no&mode=sales&pin=" + c.PIN
 city = c.city_zip.str.replace(r"\s+IL\s+", " IL ", regex=True)
 c["listing_link"] = ("https://www.zillow.com/homes/" + (c.address + " " + city).str.replace(r"[^A-Za-z0-9 ]", "", regex=True).str.strip().str.replace(r"\s+", "-", regex=True) + "_rb/")
@@ -60,6 +67,9 @@ cols = {
     "last_sale_price": "Last sale price $",
     "last_sale_doc_type": "Last sale deed type",
     "last_sale_buyer": "Last sale buyer",
+    "listing_found": "Listing found (web search)",
+    "listing_url": "Listing link",
+    "listing_price": "Listing price $",
     "listing_link": "Check for sale (Zillow)",
     "record_link": "County sales record",
     "flag_text": "Flags",
@@ -113,6 +123,7 @@ readme = [
     ("Zoning", "Each municipality's own published zoning layer, plus DuPage County unincorporated zoning. Layer URLs are on the 'Coverage' sheet."),
     ("Sales", "Most recent recorded transfer from the DuPage County Property Lookup portal (https://propertylookup.dupagecounty.gov), Sales page per PIN. Includes non-market transfers (quitclaim, trustee and other deeds, often at $0 or $10); check the deed type before treating a price as market value."),
     ("Deed type codes", "WD warranty deed, SW special warranty deed, TD trustee's deed, ED executor's deed, QC quitclaim deed, TR trust transfer, BI beneficial interest assignment, OT other. WD/SW sales are usually market sales."),
+    ("Listing found (web search)", "TRUE where a land/development listing for the parcel's address turned up in town-by-town web searches run on the build date (sheet 'Listings found' has all 74 listings found, matched or not). Blank means no listing was found, not that the parcel is off the market. Searches covered land listings, so houses are rarely matched."),
     ("For sale", "No free, permitted source of active listings exists (listings come from the MLS; Zillow/Redfin/LoopNet prohibit automated collection). 'Check for sale' opens a Zillow search for the address. Vacant parcels without a street address have no link."),
     ("Building footprints", "USA Structures (FEMA/ORNL), FIPS 17043: https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0"),
     ("District rules", "Municipal zoning codes (via Zoneomics code mirror and municipal PDFs) and district names/descriptions in the towns' GIS layers."),
@@ -130,7 +141,7 @@ rm = pd.DataFrame(readme, columns=["Item", "Detail"])
 xlsx = f"{OUT}/DuPage_apartment_zoned_vacant_or_SF_parcels.xlsx"
 # Written cell by cell with xlsxwriter: text goes in the shared-strings table, which
 # Google Sheets requires (it drops pandas/openpyxl "inline string" cells on import).
-LINKS = {"Map link": "map", "Check for sale (Zillow)": "check listing", "County sales record": "sales record"}
+LINKS = {"Listing link": "listing", "Map link": "map", "Check for sale (Zillow)": "check listing", "County sales record": "sales record"}
 wb = xlsxwriter.Workbook(xlsx, {"strings_to_numbers": False, "strings_to_formulas": False, "strings_to_urls": False})
 f_head = wb.add_format({"bold": True, "font_color": "#FFFFFF", "bg_color": "#1F3A5F", "text_wrap": True, "valign": "top"})
 f_wrap = wb.add_format({"text_wrap": True, "valign": "top"})
@@ -171,6 +182,9 @@ def write_sheet(name, df, widths=None, wrap=False, filt=True):
 write_sheet("Read me", rm, widths={"Item": 48, "Detail": 120}, wrap=True, filt=False)
 write_sheet("Parcels", tbl, widths={"Last sale date": 12})
 write_sheet("Summary by town", summary)
+lst = listings.rename(columns={"address": "Listed address", "town": "Town", "price": "Asking price $", "acres": "Acres (listing)",
+                               "source_url": "Source", "note": "Note", "matched_PINs": "Matched candidate PINs"})
+write_sheet("Listings found", lst, widths={"Source": 60, "Note": 50})
 write_sheet("Zoning districts", zt)
 write_sheet("Coverage", cov)
 wb.close()
@@ -178,13 +192,14 @@ print("wrote", xlsx, len(tbl), "rows")
 
 # ---------------------------------------------------------------- map data
 m = c[["PIN", "address", "MUNICIPALITY", "current_use", "zoning_cat", "zoning_raw", "acres",
-       "REA017_FCV_TOTAL", "flag_text", "last_sale_date", "last_sale_price", "last_sale_doc_type", "listing_link", "geometry"]].copy()
+       "REA017_FCV_TOTAL", "flag_text", "last_sale_date", "last_sale_price", "last_sale_doc_type", "listing_link", "listing_url", "listing_price", "geometry"]].copy()
 m["last_sale_date"] = m.last_sale_date.dt.strftime("%Y-%m-%d")
 m["last_sale_price"] = m.last_sale_price.astype("Int64").astype(str).replace("<NA>", "")
 m["geometry"] = m.to_crs(3435).simplify(1.5).to_crs(4326)
 m = m.rename(columns={"MUNICIPALITY": "town", "current_use": "use", "zoning_cat": "cat", "zoning_raw": "zone",
                       "REA017_FCV_TOTAL": "av", "flag_text": "flags",
-                      "last_sale_date": "sd", "last_sale_price": "sp", "last_sale_doc_type": "st", "listing_link": "zl"})
+                      "last_sale_date": "sd", "last_sale_price": "sp", "last_sale_doc_type": "st", "listing_link": "zl", "listing_url": "lu", "listing_price": "lp"})
+m["lp"] = pd.to_numeric(m.lp, errors="coerce").astype("Int64").astype(str).replace("<NA>", "")
 m["use"] = m.use.map({"Vacant land": "V", "Single-family home": "S"})
 m["town"] = m.town.replace({"Uninc": "Unincorporated"})
 m["av"] = m.av.fillna(0).astype(int)
