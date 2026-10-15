@@ -70,6 +70,8 @@ cols = {
     "listing_found": "Listing found (web search)",
     "listing_url": "Listing link",
     "listing_price": "Listing price $",
+    "listing_status": "Listing status",
+    "listing_note": "Listing note",
     "listing_link": "Check for sale (Zillow)",
     "record_link": "County sales record",
     "flag_text": "Flags",
@@ -123,7 +125,7 @@ readme = [
     ("Zoning", "Each municipality's own published zoning layer, plus DuPage County unincorporated zoning. Layer URLs are on the 'Coverage' sheet."),
     ("Sales", "Most recent recorded transfer from the DuPage County Property Lookup portal (https://propertylookup.dupagecounty.gov), Sales page per PIN. Includes non-market transfers (quitclaim, trustee and other deeds, often at $0 or $10); check the deed type before treating a price as market value."),
     ("Deed type codes", "WD warranty deed, SW special warranty deed, TD trustee's deed, ED executor's deed, QC quitclaim deed, TR trust transfer, BI beneficial interest assignment, OT other. WD/SW sales are usually market sales."),
-    ("Listing found (web search)", "TRUE where a land/development listing for the parcel's address turned up in town-by-town web searches run on the build date (sheet 'Listings found' has all 74 listings found, matched or not). Blank means no listing was found, not that the parcel is off the market. Searches covered land listings, so houses are rarely matched."),
+    ("Listing found (web search)", "TRUE where a land/development listing for the parcel's address turned up in town-by-town web searches run on the build date (sheet 'Listings found' has all 74 listings found, matched or not). Blank means no listing was found, not that the parcel is off the market. Searches covered land listings in 18 towns plus home listings on the streets with the most candidate houses and teardown/as-is listings, so most houses for sale are still missed. Pending listings are included; sold ones are not."),
     ("For sale", "No free, permitted source of active listings exists (listings come from the MLS; Zillow/Redfin/LoopNet prohibit automated collection). 'Check for sale' opens a Zillow search for the address. Vacant parcels without a street address have no link."),
     ("Building footprints", "USA Structures (FEMA/ORNL), FIPS 17043: https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0"),
     ("District rules", "Municipal zoning codes (via Zoneomics code mirror and municipal PDFs) and district names/descriptions in the towns' GIS layers."),
@@ -183,7 +185,7 @@ write_sheet("Read me", rm, widths={"Item": 48, "Detail": 120}, wrap=True, filt=F
 write_sheet("Parcels", tbl, widths={"Last sale date": 12})
 write_sheet("Summary by town", summary)
 lst = listings.rename(columns={"address": "Listed address", "town": "Town", "price": "Asking price $", "acres": "Acres (listing)",
-                               "source_url": "Source", "note": "Note", "matched_PINs": "Matched candidate PINs"})
+                               "type": "Type", "status": "Status", "source_url": "Source", "note": "Note", "matched_PINs": "Matched candidate PINs"})
 write_sheet("Listings found", lst, widths={"Source": 60, "Note": 50})
 write_sheet("Zoning districts", zt)
 write_sheet("Coverage", cov)
