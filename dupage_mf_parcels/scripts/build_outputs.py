@@ -12,6 +12,19 @@ from zoning_classes import CLASSES, LABELS
 
 WORK, OUT = sys.argv[1], sys.argv[2]
 c = gpd.read_parquet(f"{WORK}/_candidates.parquet").to_crs(4326)
+# Declared use at last transfer (fetch_use.py) and multi-unit/non-residential flags (flag_multiunit.py).
+try:
+    use = pd.read_csv(f"{WORK}/_use.csv", dtype=str)[["pin", "current_use"]].rename(columns={"pin": "PIN", "current_use": "declared_use"})
+    use["declared_use"] = use.declared_use.str.replace(r"^\w – ", "", regex=True).str.replace("Apartment =", "Apartment (6 units or less)")
+    c = c.merge(use, on="PIN", how="left")
+except FileNotFoundError:
+    c["declared_use"] = None
+try:
+    flags = pd.read_csv(f"{WORK}/_multiunit_flags.csv", dtype=str)
+except FileNotFoundError:
+    flags = pd.DataFrame(columns=["PIN", "multiunit_reason"])
+removed = c[c.PIN.isin(flags.PIN)].merge(flags, on="PIN")
+c = c[~c.PIN.isin(flags.PIN)].copy()
 cov = pd.read_csv(f"{WORK}/_coverage.csv")
 
 c["address"] = c.PROPADDRL1.fillna("").str.strip()
@@ -63,6 +76,7 @@ cols = {
     "REA017_FCV_TOTAL": "Assessed total $",
     "market_value_est": "Est. market value $ (3x assessed)",
     "BILLNAME": "Taxpayer name",
+    "declared_use": "Declared use at last sale (PTAX-203)",
     "last_sale_date": "Last sale date",
     "last_sale_price": "Last sale price $",
     "last_sale_doc_type": "Last sale deed type",
@@ -124,6 +138,7 @@ readme = [
     ("Parcels & assessment", "DuPage County GIS, ParcelsWithRealEstateCC: https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/FeatureServer/0 (assessed values are 1/3 of market value)."),
     ("Zoning", "Each municipality's own published zoning layer, plus DuPage County unincorporated zoning. Layer URLs are on the 'Coverage' sheet."),
     ("Sales", "Most recent recorded transfer from the DuPage County Property Lookup portal (https://propertylookup.dupagecounty.gov), Sales page per PIN. Includes non-market transfers (quitclaim, trustee and other deeds, often at $0 or $10); check the deed type before treating a price as market value."),
+    ("Multi-unit / non-residential removal", "Removed (see 'Removed - multi-unit' tab): parcels whose most recent PTAX-203 transfer declaration lists the property as an apartment building, office, retail, commercial, industrial or other non-residential use; parcels in subdivisions named townhouse/townhome/condo/duplex/two-flat; and parcels with two adjoining street addresses (side-by-side duplex) or 3+ address points at one address in the county address-point layer. PTAX-203 groups duplexes with single-family 'Residence', so duplexes with a single street address can still slip through."),
     ("Deed type codes", "WD warranty deed, SW special warranty deed, TD trustee's deed, ED executor's deed, QC quitclaim deed, TR trust transfer, BI beneficial interest assignment, OT other. WD/SW sales are usually market sales."),
     ("Listing found (web search)", "TRUE where a land/development listing for the parcel's address turned up in town-by-town web searches run on the build date (sheet 'Listings found' has all 74 listings found, matched or not). Blank means no listing was found, not that the parcel is off the market. Searches covered land listings in 18 towns plus home listings on the streets with the most candidate houses and teardown/as-is listings, so most houses for sale are still missed. Pending listings are included; sold ones are not."),
     ("For sale", "No free, permitted source of active listings exists (listings come from the MLS; Zillow/Redfin/LoopNet prohibit automated collection). 'Check for sale' opens a Zillow search for the address. Vacant parcels without a street address have no link."),
@@ -187,6 +202,12 @@ write_sheet("Summary by town", summary)
 lst = listings.rename(columns={"address": "Listed address", "town": "Town", "price": "Asking price $", "acres": "Acres (listing)",
                                "type": "Type", "status": "Status", "source_url": "Source", "note": "Note", "matched_PINs": "Matched candidate PINs"})
 write_sheet("Listings found", lst, widths={"Source": 60, "Note": 50})
+rem = removed.assign(address=removed.PROPADDRL1.fillna("").str.strip())[
+    ["PIN", "address", "MUNICIPALITY", "current_use", "zoning_raw", "acres", "declared_use", "multiunit_reason", "BILLNAME"]
+].rename(columns={"address": "Property address", "MUNICIPALITY": "Municipality", "current_use": "Was listed as",
+                  "zoning_raw": "Zoning district", "acres": "Lot acres", "declared_use": "Declared use at last sale",
+                  "multiunit_reason": "Why removed", "BILLNAME": "Taxpayer name"})
+write_sheet("Removed - multi-unit", rem.sort_values(["Municipality", "Property address"]), widths={"Why removed": 70})
 write_sheet("Zoning districts", zt)
 write_sheet("Coverage", cov)
 wb.close()
