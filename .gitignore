@@ -1,2 +1,13 @@
 __pycache__/
 *.pyc
+
+# Uploaded/external data and analysis output stay out of git (see CLAUDE.md).
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.zip
+*prolexic*
+*saga*
+# Exception: DuPage parcel work is public-record data and safe to commit.
+!dupage_mf_parcels/**
